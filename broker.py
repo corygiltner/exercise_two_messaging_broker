@@ -1,36 +1,65 @@
 
 # first of all import the socket library
 import socket
+import json
+import datetime
+import hashlib
 
-# next create a socket object
+# messages
+message = {
+    "action": "",
+    "topic": "",
+    "msg": ""
+}
+
+# list to hold subscription topics
+# student topic is explicitly added
+topics = [
+    {"student": []}
+]
+
+
+def log_message(m):
+    print(str(datetime.datetime.now()) + ": " + m)
+
+
+def digest_message(m):
+    h = hashlib.sha256()
+    h.update(m.encode('ascii'))
+    dig = h.digest()
+    return hex(dig)
+
+
 s = socket.socket()
-print("Socket successfully created")
-
-# reserve a port on your computer in our
-# case it is 12345 but it can be anything
 port = 8080
-
-# Next bind to the port
-# we have not typed any ip in the ip field
-# instead we have inputted an empty string
-# this makes the server listen to requests
-# coming from other computers on the network
 s.bind(('', port))
-print("socket binded to %s" %(port))
-
 s.listen(5)
-print("socket is listening")
+log_message("broker is listening locally at " + str(port))
 
 while True:
+    conn, addr = s.accept()
+    received = conn.recv(1024)
+    d = received.decode("ascii")
+    r = json.dumps(d)
+    conn.close()
+    msg = r["msg"]
+    digest = digest_message(msg).encode('ascii')
+    conn.sendall(digest)
+    conn.close()
 
-    # Establish connection with client.
-    c, addr = s.accept()
-    print('Got connection from', addr)
-
-    # send a thank you message to the client.
-    c.send(b'Thank you for connecting')
-
-    c.re
-
-    # Close the connection with the client
-    c.close()
+    # to subscribe the subscriber should send the topic
+    # they want to subscribe to with a message with the
+    # formateed as host:ports
+    if r["action"] == "sub":
+        topics[r["topic"]].append(r["msg"])
+        print(addr)
+    elif r["action"] == "pub":
+        for sub in topics[r["topic"]]:
+            a = sub.split(':')
+            sub_host = a[0]
+            sub_port = a[1]
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((sub_host, sub_port))
+                s.sendall(msg.encode('ascii'))
+                rec = s.recv(1024)
+                print(rec)
